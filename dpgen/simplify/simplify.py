@@ -29,6 +29,7 @@ from dpgen.generator.run import make_train, run_train, post_train, run_fp, post_
 from dpgen.generator.lib.utils import log_iter, make_iter_name, create_path, record_iter
 from dpgen.remote.decide_machine import decide_train_machine, decide_fp_machine, decide_model_devi_machine
 from dpgen.generator.lib.gaussian import make_gaussian_input
+from dpgen.generator.lib.xtb import make_xtb_input
 
 
 picked_data_name = "data.picked"
@@ -500,6 +501,18 @@ def make_fp_configs(iter_index, jdata):
                     json.dump(job, fp, indent=4)
                 jj += 1
 
+def make_fp_xtb(iter_index, jdata):
+    work_path = os.path.join(make_iter_name(iter_index), fp_name)
+    fp_tasks = glob.glob(os.path.join(work_path, 'task.*'))
+    cwd = os.getcwd()
+    for ii in fp_tasks:
+        os.chdir(ii)
+        sys_data = dpdata.System('POSCAR').data
+        ret = make_xtb_input(sys_data)
+        with open('input.xyz', 'w') as fp:
+            fp.write(ret)
+        os.chdir(cwd)
+
 
 def make_fp_gaussian(iter_index, jdata):
     work_path = os.path.join(make_iter_name(iter_index), fp_name)
@@ -545,6 +558,8 @@ def make_fp_calculation(iter_index, jdata):
         make_fp_vasp(iter_index, jdata)
     elif fp_style == 'gaussian':
         make_fp_gaussian(iter_index, jdata)
+    elif fp_style == "xtb":
+        make_fp_xtb(iter_index,jdata)
     else :
         raise RuntimeError('unsupported fp_style ' + fp_style)
 

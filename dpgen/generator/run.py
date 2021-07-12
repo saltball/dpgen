@@ -2089,6 +2089,17 @@ def _pwmat_check_fin (ii) :
         return False
     return True
 
+def _xtb_check_fin(ii):
+    if os.path.isfile(os.path.join(ii, 'output')) :
+        with open(os.path.join(ii, 'output'), 'r') as fp :
+            content = fp.read()
+            count = content.count('finished run')
+            if count == 1 :
+                return False
+    else :
+        return False
+    return True
+
 def run_fp_inner (iter_index,
                   jdata,
                   mdata,
@@ -2193,6 +2204,10 @@ def run_fp (iter_index,
         forward_files = ['atom.config', 'etot.input'] + fp_pp_files
         backward_files = ['REPORT', 'OUT.MLMD', 'output']
         run_fp_inner(iter_index, jdata, mdata, forward_files, backward_files, _pwmat_check_fin, log_file = 'output')
+    elif fp_style == "xtb":
+        forward_files = ['input.xyz']
+        backward_files = ['gradient', 'output']
+        run_fp_inner(iter_index, jdata, mdata, forward_files, backward_files, _xtb_check_fin, log_file = 'output')
     else :
         raise RuntimeError ("unsupported fp style")
 
@@ -2577,6 +2592,48 @@ def post_fp_pwmat (iter_index,
        raise RuntimeError("find too many unsuccessfully terminated jobs")
 
 
+def post_fp_xtb (iter_index,
+                      jdata):
+    model_devi_jobs = jdata['model_devi_jobs']
+    assert (iter_index < len(model_devi_jobs))
+
+    iter_name = make_iter_name(iter_index)
+    work_path = os.path.join(iter_name, fp_name)
+    fp_tasks = glob.glob(os.path.join(work_path, 'task.*'))
+    fp_tasks.sort()
+    if len(fp_tasks) == 0 :
+        return
+
+    system_index = []
+    for ii in fp_tasks :
+        system_index.append(os.path.basename(ii).split('.')[1])
+    system_index.sort()
+    set_tmp = set(system_index)
+    system_index = list(set_tmp)
+    system_index.sort()
+
+    cwd = os.getcwd()
+    for ss in system_index :
+        sys_output = glob.glob(os.path.join(work_path, "task.%s.*/gradient"%ss))
+        sys_output.sort()
+        for idx,oo in enumerate(sys_output) :
+            sys = dpdata.LabeledSystem(oo, fmt = 'xtb/gradient')
+            if len(sys) > 0:
+                sys.check_type_map(type_map = jdata['type_map'])
+            if jdata.get('use_atom_pref', False):
+                sys.data['atom_pref'] = np.load(os.path.join(os.path.dirname(oo), "atom_pref.npy"))
+            if idx == 0:
+                if jdata.get('use_clusters', False):
+                    all_sys = dpdata.MultiSystems(sys, type_map = jdata['type_map'])
+                else:
+                    all_sys = sys
+            else:
+                all_sys.append(sys)
+        sys_data_path = os.path.join(work_path, 'data.%s'%ss)
+        all_sys.to_deepmd_raw(sys_data_path)
+        all_sys.to_deepmd_npy(sys_data_path, set_size = len(sys_output))
+
+
 def post_fp (iter_index,
              jdata) :
     fp_style = jdata['fp_style']
@@ -2595,6 +2652,8 @@ def post_fp (iter_index,
         post_fp_cp2k(iter_index, jdata)
     elif fp_style == 'pwmat' :
         post_fp_pwmat(iter_index, jdata)
+    elif fp_style == 'xtb' :
+        post_fp_xtb(iter_index, jdata)
     else :
         raise RuntimeError ("unsupported fp style")
     # clean traj
