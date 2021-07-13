@@ -4,6 +4,7 @@
 import os, sys, paramiko, json, uuid, tarfile, time, stat, shutil
 from glob import glob
 from dpgen import dlog
+import pathlib
 
 class SSHSession (object) :
     def __init__ (self, jdata) :
@@ -152,7 +153,7 @@ class SSHContext (object):
         file_list = []
         for ii in job_dirs :
             for jj in local_up_files :
-                file_list.append(os.path.join(ii,jj))        
+                file_list.append(pathlib.PurePath(os.path.join(ii,jj)).as_posix())        
         self._put_files(file_list, dereference = dereference)
         os.chdir(cwd)
 
